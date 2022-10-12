@@ -6,60 +6,73 @@
 #define CREATE_TRACE_POINTS
 #include "trace.h"
 
-#undef pr_fmt
-#define pr_fmt(fmt)	"null_blk: " fmt
-
 static inline sector_t mb_to_sects(unsigned long mb)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("<- %s}",__func__);
 	return ((sector_t)mb * SZ_1M) >> SECTOR_SHIFT;
 }
 
 static inline unsigned int null_zone_no(struct nullb_device *dev, sector_t sect)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("<- %s}",__func__);
 	return sect >> ilog2(dev->zone_size_sects);
 }
 
 static inline void null_lock_zone_res(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	if (dev->need_zone_res_mgmt)
 		spin_lock_irq(&dev->zone_res_lock);
+	pr_info("<- %s}",__func__);
 }
 
 static inline void null_unlock_zone_res(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	if (dev->need_zone_res_mgmt)
 		spin_unlock_irq(&dev->zone_res_lock);
+	pr_info("<- %s}",__func__);
 }
 
 static inline void null_init_zone_lock(struct nullb_device *dev,
 				       struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	if (!dev->memory_backed)
 		spin_lock_init(&zone->spinlock);
 	else
 		mutex_init(&zone->mutex);
+	pr_info("<- %s}",__func__);
 }
 
 static inline void null_lock_zone(struct nullb_device *dev,
 				  struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	if (!dev->memory_backed)
 		spin_lock_irq(&zone->spinlock);
 	else
 		mutex_lock(&zone->mutex);
+	pr_info("<- %s}",__func__);
 }
 
 static inline void null_unlock_zone(struct nullb_device *dev,
 				    struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	if (!dev->memory_backed)
 		spin_unlock_irq(&zone->spinlock);
 	else
 		mutex_unlock(&zone->mutex);
+	pr_info("<- %s}",__func__);
 }
 
 int null_init_zoned_dev(struct nullb_device *dev, struct request_queue *q)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("===zone.c initialization===");
 	sector_t dev_capacity_sects, zone_capacity_sects;
 	struct nullb_zone *zone;
 	sector_t sector = 0;
@@ -78,8 +91,8 @@ int null_init_zoned_dev(struct nullb_device *dev, struct request_queue *q)
 		dev->zone_capacity = dev->zone_size;
 
 	if (dev->zone_capacity > dev->zone_size) {
-		pr_err("zone capacity (%lu MB) larger than zone size (%lu MB)\n",
-		       dev->zone_capacity, dev->zone_size);
+		pr_err("null_blk: zone capacity (%lu MB) larger than zone size (%lu MB)\n",
+					dev->zone_capacity, dev->zone_size);
 		return -EINVAL;
 	}
 
@@ -150,12 +163,13 @@ int null_init_zoned_dev(struct nullb_device *dev, struct request_queue *q)
 
 		sector += dev->zone_size_sects;
 	}
-
+	pr_info("<- %s}",__func__);
 	return 0;
 }
 
 int null_register_zoned_dev(struct nullb *nullb)
 {
+	pr_info("{-> %s",__func__);
 	struct nullb_device *dev = nullb->dev;
 	struct request_queue *q = nullb->q;
 
@@ -176,19 +190,23 @@ int null_register_zoned_dev(struct nullb *nullb)
 	blk_queue_max_zone_append_sectors(q, dev->zone_size_sects);
 	blk_queue_max_open_zones(q, dev->zone_max_open);
 	blk_queue_max_active_zones(q, dev->zone_max_active);
-
+	pr_info("<- %s}",__func__);
 	return 0;
 }
 
 void null_free_zoned_dev(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	kvfree(dev->zones);
 	dev->zones = NULL;
+	pr_info("<- %s}",__func__);
 }
 
 int null_report_zones(struct gendisk *disk, sector_t sector,
 		unsigned int nr_zones, report_zones_cb cb, void *data)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("**************** report process****************");
 	struct nullb *nullb = disk->private_data;
 	struct nullb_device *dev = nullb->dev;
 	unsigned int first_zone, i;
@@ -225,7 +243,7 @@ int null_report_zones(struct gendisk *disk, sector_t sector,
 		if (error)
 			return error;
 	}
-
+	pr_info("<- %s}",__func__);
 	return nr_zones;
 }
 
@@ -236,6 +254,7 @@ int null_report_zones(struct gendisk *disk, sector_t sector,
 size_t null_zone_valid_read_len(struct nullb *nullb,
 				sector_t sector, unsigned int len)
 {
+	pr_info("{-> %s",__func__);
 	struct nullb_device *dev = nullb->dev;
 	struct nullb_zone *zone = &dev->zones[null_zone_no(dev, sector)];
 	unsigned int nr_sectors = len >> SECTOR_SHIFT;
@@ -247,13 +266,14 @@ size_t null_zone_valid_read_len(struct nullb *nullb,
 
 	if (sector > zone->wp)
 		return 0;
-
+	pr_info("<- %s}",__func__);
 	return (zone->wp - sector) << SECTOR_SHIFT;
 }
 
 static blk_status_t __null_close_zone(struct nullb_device *dev,
 				      struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	switch (zone->cond) {
 	case BLK_ZONE_COND_CLOSED:
 		/* close operation on closed is not an error */
@@ -276,12 +296,13 @@ static blk_status_t __null_close_zone(struct nullb_device *dev,
 		zone->cond = BLK_ZONE_COND_CLOSED;
 		dev->nr_zones_closed++;
 	}
-
+	pr_info("<- %s}",__func__);
 	return BLK_STS_OK;
 }
 
 static void null_close_imp_open_zone(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	struct nullb_zone *zone;
 	unsigned int zno, i;
 
@@ -301,22 +322,25 @@ static void null_close_imp_open_zone(struct nullb_device *dev)
 			return;
 		}
 	}
+	pr_info("<- %s}",__func__);
 }
 
 static blk_status_t null_check_active(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	if (!dev->zone_max_active)
 		return BLK_STS_OK;
 
 	if (dev->nr_zones_exp_open + dev->nr_zones_imp_open +
 			dev->nr_zones_closed < dev->zone_max_active)
 		return BLK_STS_OK;
-
+	pr_info("<- %s}",__func__);
 	return BLK_STS_ZONE_ACTIVE_RESOURCE;
 }
 
 static blk_status_t null_check_open(struct nullb_device *dev)
 {
+	pr_info("{-> %s",__func__);
 	if (!dev->zone_max_open)
 		return BLK_STS_OK;
 
@@ -329,7 +353,7 @@ static blk_status_t null_check_open(struct nullb_device *dev)
 			return BLK_STS_OK;
 		}
 	}
-
+	pr_info("<- %s}",__func__);
 	return BLK_STS_ZONE_OPEN_RESOURCE;
 }
 
@@ -349,6 +373,7 @@ static blk_status_t null_check_open(struct nullb_device *dev)
 static blk_status_t null_check_zone_resources(struct nullb_device *dev,
 					      struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	blk_status_t ret;
 
 	switch (zone->cond) {
@@ -364,12 +389,24 @@ static blk_status_t null_check_zone_resources(struct nullb_device *dev,
 		WARN_ON(1);
 		return BLK_STS_IOERR;
 	}
+	pr_info("<- %s}",__func__);
 }
-
+int tag_sub_bio=0;
 static blk_status_t null_zone_write(struct nullb_cmd *cmd, sector_t sector,
 				    unsigned int nr_sectors, bool append)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("--write process is under going");
+	/*
+	if(tag_sub_bio==0){
+	struct bio *bio_test = bio_alloc((*bdev)cmd->nq->dev, 1, REQ_OP_READ, GFP_NOIO);
+	bio_test->bi_io_vec->bv_len=100;
+	submit_bio(bio_test);
+	tag_sub_bio=1;
+	}
+	*/
 	struct nullb_device *dev = cmd->nq->dev;
+	pr_info("-- request time is %lu -\n", dev->completion_nsec);
 	unsigned int zno = null_zone_no(dev, sector);
 	struct nullb_zone *zone = &dev->zones[zno];
 	blk_status_t ret;
@@ -453,13 +490,14 @@ static blk_status_t null_zone_write(struct nullb_cmd *cmd, sector_t sector,
 
 unlock:
 	null_unlock_zone(dev, zone);
-
+	pr_info("<- %s}",__func__);
 	return ret;
 }
 
 static blk_status_t null_open_zone(struct nullb_device *dev,
 				   struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	blk_status_t ret = BLK_STS_OK;
 
 	if (zone->type == BLK_ZONE_TYPE_CONVENTIONAL)
@@ -496,13 +534,14 @@ static blk_status_t null_open_zone(struct nullb_device *dev,
 
 unlock:
 	null_unlock_zone_res(dev);
-
+	pr_info("<- %s}",__func__);
 	return ret;
 }
 
 static blk_status_t null_close_zone(struct nullb_device *dev,
 				    struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	blk_status_t ret;
 
 	if (zone->type == BLK_ZONE_TYPE_CONVENTIONAL)
@@ -511,13 +550,14 @@ static blk_status_t null_close_zone(struct nullb_device *dev,
 	null_lock_zone_res(dev);
 	ret = __null_close_zone(dev, zone);
 	null_unlock_zone_res(dev);
-
+	pr_info("<- %s}",__func__);
 	return ret;
 }
 
 static blk_status_t null_finish_zone(struct nullb_device *dev,
 				     struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
 	blk_status_t ret = BLK_STS_OK;
 
 	if (zone->type == BLK_ZONE_TYPE_CONVENTIONAL)
@@ -556,13 +596,15 @@ static blk_status_t null_finish_zone(struct nullb_device *dev,
 
 unlock:
 	null_unlock_zone_res(dev);
-
+	pr_info("<- %s}",__func__);
 	return ret;
 }
 
 static blk_status_t null_reset_zone(struct nullb_device *dev,
 				    struct nullb_zone *zone)
 {
+	pr_info("{-> %s",__func__);
+	pr_info("reset zones--");
 	if (zone->type == BLK_ZONE_TYPE_CONVENTIONAL)
 		return BLK_STS_IOERR;
 
@@ -596,13 +638,14 @@ static blk_status_t null_reset_zone(struct nullb_device *dev,
 
 	if (dev->memory_backed)
 		return null_handle_discard(dev, zone->start, zone->len);
-
+	pr_info("<- %s}",__func__);
 	return BLK_STS_OK;
 }
 
 static blk_status_t null_zone_mgmt(struct nullb_cmd *cmd, enum req_opf op,
 				   sector_t sector)
 {
+	pr_info("{-> %s",__func__);
 	struct nullb_device *dev = cmd->nq->dev;
 	unsigned int zone_no;
 	struct nullb_zone *zone;
@@ -649,21 +692,24 @@ static blk_status_t null_zone_mgmt(struct nullb_cmd *cmd, enum req_opf op,
 		trace_nullb_zone_op(cmd, zone_no, zone->cond);
 
 	null_unlock_zone(dev, zone);
-
+	pr_info("<- %s}",__func__);
 	return ret;
 }
 
 blk_status_t null_process_zoned_cmd(struct nullb_cmd *cmd, enum req_opf op,
 				    sector_t sector, sector_t nr_sectors)
 {
+	pr_info("{-> %s",__func__);
 	struct nullb_device *dev;
 	struct nullb_zone *zone;
 	blk_status_t sts;
 
 	switch (op) {
 	case REQ_OP_WRITE:
+		pr_info("null_zone_write is false");
 		return null_zone_write(cmd, sector, nr_sectors, false);
 	case REQ_OP_ZONE_APPEND:
+		pr_info("null_zone_write is append");
 		return null_zone_write(cmd, sector, nr_sectors, true);
 	case REQ_OP_ZONE_RESET:
 	case REQ_OP_ZONE_RESET_ALL:
@@ -680,4 +726,5 @@ blk_status_t null_process_zoned_cmd(struct nullb_cmd *cmd, enum req_opf op,
 		null_unlock_zone(dev, zone);
 		return sts;
 	}
+	pr_info("<- %s}",__func__);
 }
